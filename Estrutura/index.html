@@ -39,6 +39,13 @@
             --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+            /* Cores do Kanban */
+            --kanban-col-cyan: #06b6d4;
+            --kanban-col-green: #22c55e;
+            --kanban-col-orange: #f97316;
+            --kanban-col-purple: #a855f7;
+            --kanban-col-pink: #ec4899;
         }
 
         /* Tema Dark */
@@ -238,6 +245,93 @@
             background-color: var(--secondary-color);
         }
 
+        /* Estilos do Kanban */
+        .kanban-container {
+            display: flex;
+            gap: var(--spacing-md);
+            overflow-x: auto;
+            padding: var(--spacing-md);
+            min-height: calc(100vh - 200px);
+        }
+
+        .kanban-column {
+            flex: 0 0 300px;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-md);
+        }
+
+        .kanban-column-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 2px solid var(--bg-muted);
+        }
+
+        .kanban-column-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .kanban-card {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            box-shadow: var(--shadow-sm);
+            cursor: grab;
+        }
+
+        .kanban-card:active {
+            cursor: grabbing;
+        }
+
+        .kanban-card-title {
+            font-weight: 500;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .kanban-card-description {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Estilos do Painel de Status */
+        .status-panel {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-lg);
+        }
+
+        .status-controls {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: var(--spacing-md);
+        }
+
+        .status-table th,
+        .status-table td {
+            padding: var(--spacing-sm);
+            text-align: left;
+            border-bottom: 1px solid var(--bg-muted);
+        }
+
+        .status-table th {
+            background-color: var(--bg-secondary);
+            font-weight: 600;
+        }
+
+        .status-table tr:hover {
+            background-color: var(--bg-muted);
+        }
+
         /* Responsividade */
         @media (max-width: 1024px) {
             .sidebar {
@@ -248,6 +342,20 @@
 
             .main-content {
                 margin-left: 0;
+            }
+
+            .kanban-container {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+
+            .status-controls {
+                flex-direction: column;
+            }
+
+            .status-table {
+                overflow-x: auto;
+                display: block;
             }
         }
     </style>
@@ -431,7 +539,272 @@
             });
         }
 
-        // Funções de Gerenciamento de Views
+        // Funções do Kanban
+        async function renderKanbanView() {
+            const viewPlaceholder = document.getElementById('view-placeholder');
+            if (!viewPlaceholder) return;
+
+            viewPlaceholder.innerHTML = `
+                <div class="view-container">
+                    <div class="header">
+                        <h1 class="header-title">Recrutamento</h1>
+                        <div class="header-actions">
+                            <button onclick="addNewCard()">
+                                <i class="fas fa-plus"></i> Nova Candidata
+                            </button>
+                            <button class="theme-toggle-btn">
+                                <i class="fas ${currentTheme === 'dark' ? 'fa-sun' : 'fa-moon'}"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="kanban-container" id="kanban-board">
+                        ${KANBAN_CONFIG.defaultColumns.map(column => `
+                            <div class="kanban-column" data-column-id="${column.id}">
+                                <div class="kanban-column-header">
+                                    <h2 class="kanban-column-title">${column.title}</h2>
+                                </div>
+                                <div class="kanban-cards" data-column-cards="${column.id}"></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            // Inicializa o Sortable.js para cada coluna
+            document.querySelectorAll('.kanban-cards').forEach(column => {
+                new Sortable(column, {
+                    group: 'kanban',
+                    animation: 150,
+                    onEnd: async function(evt) {
+                        const cardId = evt.item.dataset.cardId;
+                        const newColumn = evt.to.dataset.columnCards;
+                        await updateCardColumn(cardId, newColumn);
+                    }
+                });
+            });
+
+            // Carrega os cards do Supabase
+            await loadKanbanCards();
+        }
+
+        async function loadKanbanCards() {
+            try {
+                const { data: cards, error } = await supabase
+                    .from(KANBAN_CONFIG.tableName)
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                // Limpa os cards existentes
+                document.querySelectorAll('.kanban-cards').forEach(column => {
+                    column.innerHTML = '';
+                });
+
+                // Distribui os cards nas colunas
+                cards.forEach(card => {
+                    const columnElement = document.querySelector(`[data-column-cards="${card.column}"]`);
+                    if (columnElement) {
+                        columnElement.appendChild(createKanbanCard(card));
+                    }
+                });
+            } catch (error) {
+                console.error('Erro ao carregar cards:', error);
+                showToast('Erro', 'Não foi possível carregar os cards.', 'error');
+            }
+        }
+
+        function createKanbanCard(cardData) {
+            const card = document.createElement('div');
+            card.className = 'kanban-card';
+            card.dataset.cardId = cardData.id;
+            card.innerHTML = `
+                <h3 class="kanban-card-title">${cardData.name || 'Sem nome'}</h3>
+                <p class="kanban-card-description">${cardData.description || 'Sem descrição'}</p>
+            `;
+            return card;
+        }
+
+        async function updateCardColumn(cardId, newColumn) {
+            try {
+                const { error } = await supabase
+                    .from(KANBAN_CONFIG.tableName)
+                    .update({ column: newColumn })
+                    .eq('id', cardId);
+
+                if (error) throw error;
+                showToast('Sucesso', 'Card atualizado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao atualizar card:', error);
+                showToast('Erro', 'Não foi possível atualizar o card.', 'error');
+                await loadKanbanCards(); // Recarrega os cards para reverter mudanças
+            }
+        }
+
+        async function addNewCard() {
+            const name = prompt('Nome da candidata:');
+            if (!name) return;
+
+            try {
+                const { error } = await supabase
+                    .from(KANBAN_CONFIG.tableName)
+                    .insert([{
+                        name,
+                        column: 'col-qualificadas',
+                        created_at: new Date().toISOString()
+                    }]);
+
+                if (error) throw error;
+                showToast('Sucesso', 'Candidata adicionada com sucesso!');
+                await loadKanbanCards();
+            } catch (error) {
+                console.error('Erro ao adicionar card:', error);
+                showToast('Erro', 'Não foi possível adicionar a candidata.', 'error');
+            }
+        }
+
+        // Funções do Painel de Status
+        async function renderStatusPanelView() {
+            const viewPlaceholder = document.getElementById('view-placeholder');
+            if (!viewPlaceholder) return;
+
+            viewPlaceholder.innerHTML = `
+                <div class="view-container">
+                    <div class="header">
+                        <h1 class="header-title">Status de Atendimento</h1>
+                        <div class="header-actions">
+                            <select id="empresa-select" onchange="changeEmpresa(this.value)">
+                                ${Object.keys(STATUS_PANEL_CONFIG.empresas).map(empresa => `
+                                    <option value="${empresa}">${empresa}</option>
+                                `).join('')}
+                            </select>
+                            <button onclick="refreshStatusData()">
+                                <i class="fas fa-sync"></i> Atualizar
+                            </button>
+                            <button class="theme-toggle-btn">
+                                <i class="fas ${currentTheme === 'dark' ? 'fa-sun' : 'fa-moon'}"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="status-panel">
+                        <div class="status-controls">
+                            <input type="date" id="data-filter" onchange="filterStatusData()">
+                            <input type="text" id="search-filter" placeholder="Buscar..." onkeyup="filterStatusData()">
+                        </div>
+                        <div class="status-table-container">
+                            <table class="status-table" id="status-table">
+                                <thead>
+                                    <tr>
+                                        ${STATUS_PANEL_CONFIG.displayTableHeaders.map(header => `
+                                            <th>${header}</th>
+                                        `).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Define empresa padrão e carrega dados
+            document.getElementById('empresa-select').value = STATUS_PANEL_CONFIG.empresaPadrao;
+            await loadStatusData();
+        }
+
+        async function loadStatusData() {
+            const empresaAtual = document.getElementById('empresa-select').value;
+            const config = STATUS_PANEL_CONFIG.empresas[empresaAtual];
+            
+            try {
+                const { data, error } = await supabase
+                    .from(config.tableName)
+                    .select('*')
+                    .order('DATA', { ascending: false });
+
+                if (error) throw error;
+
+                const tbody = document.querySelector('#status-table tbody');
+                tbody.innerHTML = '';
+
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    STATUS_PANEL_CONFIG.displayTableHeaders.forEach(header => {
+                        const td = document.createElement('td');
+                        if (header === 'AÇÕES') {
+                            td.innerHTML = `
+                                <button onclick="editStatus('${row.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteStatus('${row.id}')" class="danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            `;
+                        } else if (header === 'DATA') {
+                            td.textContent = formatDate(row[header]);
+                        } else {
+                            td.textContent = row[header] || '-';
+                        }
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                showToast('Erro', 'Não foi possível carregar os dados.', 'error');
+            }
+        }
+
+        async function changeEmpresa(empresa) {
+            await loadStatusData();
+        }
+
+        function filterStatusData() {
+            const dataFilter = document.getElementById('data-filter').value;
+            const searchFilter = document.getElementById('search-filter').value.toLowerCase();
+            const rows = document.querySelectorAll('#status-table tbody tr');
+
+            rows.forEach(row => {
+                const data = row.cells[0].textContent;
+                const textContent = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+                const matchesData = !dataFilter || data === formatDate(dataFilter);
+                const matchesSearch = !searchFilter || textContent.includes(searchFilter);
+                row.style.display = matchesData && matchesSearch ? '' : 'none';
+            });
+        }
+
+        async function refreshStatusData() {
+            await loadStatusData();
+            showToast('Sucesso', 'Dados atualizados com sucesso!');
+        }
+
+        async function editStatus(id) {
+            // Implementar edição de status
+            console.log('Editar status:', id);
+        }
+
+        async function deleteStatus(id) {
+            if (!confirm('Tem certeza que deseja excluir este registro?')) return;
+
+            const empresaAtual = document.getElementById('empresa-select').value;
+            const config = STATUS_PANEL_CONFIG.empresas[empresaAtual];
+
+            try {
+                const { error } = await supabase
+                    .from(config.tableName)
+                    .delete()
+                    .eq('id', id);
+
+                if (error) throw error;
+                showToast('Sucesso', 'Registro excluído com sucesso!');
+                await loadStatusData();
+            } catch (error) {
+                console.error('Erro ao excluir registro:', error);
+                showToast('Erro', 'Não foi possível excluir o registro.', 'error');
+            }
+        }
+
+        // Gerenciamento de Views
         let currentView = APP_CONFIG.defaultView;
         let currentTheme = localStorage.getItem('theme') || APP_CONFIG.defaultTheme;
 
@@ -507,9 +880,6 @@
                 icon.className = `fas ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`;
             });
         }
-
-        // Aqui você deve adicionar as funções renderKanbanView e renderStatusPanelView
-        // que estavam nos arquivos separados kanban.js e status-panel.js
     </script>
 </body>
 </html>
