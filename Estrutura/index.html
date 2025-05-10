@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DromeFlow Refatorado</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dark"> <!-- Começa com tema dark -->
+
+    <div class="app-container">
+        <!-- Sidebar será carregada aqui -->
+        <aside class="sidebar" id="sidebar-container">
+            <!-- Conteúdo da Sidebar (será carregado via JS ou incluído diretamente) -->
+        </aside>
+
+        <!-- Conteúdo Principal -->
+        <div class="main-content" id="main-content-container">
+            <!-- Views serão carregadas aqui -->
+            <div id="view-placeholder"></div>
+        </div>
+    </div>
+
+    <!-- Modals Globais (se houver) -->
+    <div id="modal-placeholder"></div>
+    <div class="toast-container" id="toastContainer"></div>
+
+
+    <!-- Bibliotecas JS Externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Scripts Principais e Componentes -->
+    <script src="js/config.js"></script> <!-- Arquivo de configuração (Supabase keys, etc.) -->
+    <script src="js/utils.js"></script> <!-- Funções utilitárias -->
+    <script src="js/main.js"></script>   <!-- Lógica principal -->
+    <script src="js/sidebar.js"></script> <!-- Lógica da Sidebar -->
+    <script src="js/kanban.js"></script>  <!-- Lógica do Kanban -->
+    <script src="js/status-panel.js"></script> <!-- Lógica do Painel de Status -->
+    <!-- Adicionar scripts para outras views/componentes conforme necessário -->
+
+</body>
+</html>
